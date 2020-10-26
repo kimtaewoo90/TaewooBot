@@ -1,0 +1,17 @@
+C:\Users\tangb\source\repos\TaewooBot\obj\Debug\TaewooBot.csprojAssemblyReference.cache
+C:\Users\tangb\source\repos\TaewooBot\obj\Debug\TaewooBot.csproj.ResolveComReference.cache
+C:\Users\tangb\source\repos\TaewooBot\obj\Debug\TaewooBot.Form1.resources
+C:\Users\tangb\source\repos\TaewooBot\obj\Debug\TaewooBot.Properties.Resources.resources
+C:\Users\tangb\source\repos\TaewooBot\obj\Debug\TaewooBot.csproj.GenerateResource.cache
+C:\Users\tangb\source\repos\TaewooBot\obj\Debug\TaewooBot.csproj.CoreCompileInputs.cache
+C:\Users\tangb\source\repos\TaewooBot\bin\Debug\TaewooBot.exe.config
+C:\Users\tangb\source\repos\TaewooBot\bin\Debug\TaewooBot.exe
+C:\Users\tangb\source\repos\TaewooBot\bin\Debug\TaewooBot.pdb
+C:\Users\tangb\source\repos\TaewooBot\bin\Debug\Interop.KHOpenAPILib.dll
+C:\Users\tangb\source\repos\TaewooBot\bin\Debug\AxInterop.KHOpenAPILib.dll
+C:\Users\tangb\source\repos\TaewooBot\obj\Debug\Interop.KHOpenAPILib.dll
+C:\Users\tangb\source\repos\TaewooBot\obj\Debug\AxInterop.KHOpenAPILib.dll
+C:\Users\tangb\source\repos\TaewooBot\obj\Debug\TaewooBot.exe
+C:\Users\tangb\source\repos\TaewooBot\obj\Debug\TaewooBot.pdb
+C:\Users\tangb\source\repos\TaewooBot\bin\Debug\Oracle.ManagedDataAccess.dll
+C:\Users\tangb\source\repos\TaewooBot\obj\Debug\TaewooBot.csproj.CopyComplete
