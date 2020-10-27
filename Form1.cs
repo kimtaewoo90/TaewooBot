@@ -25,6 +25,10 @@ namespace TaewooBot
     public partial class Form1 : Form
     {
 
+        // 비밀번호 전역 변수 설정
+        string g_passwd = "0070";
+
+
         int g_scr_no = 0;
 
         // 로그인 전역 변수 설정
@@ -35,13 +39,19 @@ namespace TaewooBot
 
         // 계좌조회 전역변수 설정 
         int g_flag_acc = 0; // 1이면 요청에 대한 응답 완료
+        int g_flag_acc_2 = 0;
+        int g_is_next = 0;
         int g_ord_amt_possible = 0; // 총 매수가능금액
         string g_rqname = null; // API에 데이터 수신을 요청할 때 사용할 요청명
-
 
         // Thread 전역 변수 설정
         int g_is_thread = 0;    // 0: 스레드 미생성, 1: 스레드 생성
         Thread thread1 = null;  // 생성된 스레드 객체를 담을 변수
+
+        // Trading 관련 전역 변수 설정
+        int g_flag_buy = 0; // 매수주문 응답
+        int g_flag_sell = 0; // 매도주문 응답
+        int g_flag_cancel_sell = 0; // 매도주문 취소 응답
 
 
         // Form1 class의 생성자
@@ -64,6 +74,8 @@ namespace TaewooBot
         {
             if(g_rqname.CompareTo(e.sRQName) == 0)
             {
+                // Temp code
+                // g_flag_acc_2 = 1;
                 ;
             }
             else
@@ -77,6 +89,10 @@ namespace TaewooBot
                         g_flag_acc = 1;
                         break;
 
+                    case "계좌평가현황요청":
+                        g_flag_acc_2 = 1;
+                        break;
+
                     default: break;
                 }
                 return;
@@ -88,11 +104,110 @@ namespace TaewooBot
                 axKHOpenAPI1.DisconnectRealData(e.sScrNo);
                 g_flag_acc = 1;
             }
+
+            if(e.sRQName == "계좌평가현황요청")
+            {
+                int repeat_cnt = 0;
+                int ii = 0;
+
+                string user_id = null;
+                string jongmok_cd = null;
+                string jongmok_nm = null;
+
+                int own_stock_cnt = 0;
+                int buy_price = 0;
+                int own_amt = 0;
+
+                repeat_cnt = axKHOpenAPI1.GetRepeatCnt(e.sTrCode, e.sRQName); // 보유종목수 가져오기
+
+                write_sys_log("테이블 (TB_ACCNT_INFO) 설정 시작 \n", 0);
+                //write_msg_log("보유종목 수 : " + repeat_cnt.ToString() + "\n", 0);
+
+                for(ii=0; ii<repeat_cnt; ii++)
+                {
+                    user_id = "";
+                    jongmok_cd = "";
+                    own_stock_cnt = 0;
+                    buy_price = 0;
+                    own_amt = 0;
+
+                    user_id = g_user_id;
+                    jongmok_cd = axKHOpenAPI1.CommGetData(e.sTrCode, "", e.sRQName, ii, "종목코드").Trim().Substring(1, 6);
+                    jongmok_nm = axKHOpenAPI1.CommGetData(e.sTrCode, "", e.sRQName, ii, "종목명").Trim();
+                    own_stock_cnt = int.Parse(axKHOpenAPI1.CommGetData(e.sTrCode, "", e.sRQName, ii, "보유수량").Trim());
+                    buy_price = int.Parse(axKHOpenAPI1.CommGetData(e.sTrCode, "", e.sRQName, ii, "평균단가").Trim());
+                    own_amt = int.Parse(axKHOpenAPI1.CommGetData(e.sTrCode, "", e.sRQName, ii, "매입금액").Trim());
+
+                    write_msg_log("종목 순번 : [ " + ii + " ]\n", 0);
+                    write_msg_log("종목코드 : [" + jongmok_cd + " ]\n", 0);
+                    write_msg_log("종목명   : [" + jongmok_nm + " ]\n", 0);
+                    write_msg_log("보유주식수 : [" + own_stock_cnt.ToString() + " ]\n", 0);
+
+                    if(own_stock_cnt == 0)
+                    {
+                        continue; 
+                    }
+                    insert_tb_accnt_info(jongmok_cd, jongmok_nm, buy_price, own_stock_cnt, own_amt);
+                }
+
+                if (ii == 0)
+                {
+                    write_msg_log("보유종목 수 : " + repeat_cnt.ToString() + "\n", 0);
+                }
+
+                write_sys_log("테이블 (TB_ACCNT_INFO) 설정 완료 \n", 0);
+                axKHOpenAPI1.DisconnectRealData(e.sScrNo);
+
+                if(e.sPrevNext.Length == 0)
+                {
+                    g_is_next = 0;
+                }
+                else
+                {
+                    g_is_next = int.Parse(e.sPrevNext);
+                }
+                g_flag_acc_2 = 1;
+            }
+
         }
         
         private void DKHOpenAPI1_OnReceiveMsg(object sender, AxKHOpenAPILib._DKHOpenAPIEvents_OnReceiveMsgEvent e)
         {
+            if(e.sRQName == "매수주문")
+            {
+                write_msg_log("\n=========== 매수주문 원장 응답정보 출력 시작 ===========\n", 0);
+                write_msg_log("sScrNo  : [ " + e.sScrNo + " ]" + "\n", 0);
+                write_msg_log("sRQName : [ " + e.sRQName + " ]" + "\n", 0);
+                write_msg_log("sTrCode : [ " + e.sTrCode + " ]" + "\n", 0);
+                write_msg_log("sMsg    : [ " + e.sMsg + " ]" + "\n", 0);
+                write_msg_log("\n=========== 매수주문 원장 응답정보 출력 종료 ===========\n", 0);
 
+                g_flag_buy = 1;
+            }
+
+            if (e.sRQName == "매도주문")
+            {
+                write_msg_log("\n=========== 매도주문 원장 응답정보 출력 시작 ===========\n", 0);
+                write_msg_log("sScrNo  : [ " + e.sScrNo + " ]" + "\n", 0);
+                write_msg_log("sRQName : [ " + e.sRQName + " ]" + "\n", 0);
+                write_msg_log("sTrCode : [ " + e.sTrCode + " ]" + "\n", 0);
+                write_msg_log("sMsg    : [ " + e.sMsg + " ]" + "\n", 0);
+                write_msg_log("\n=========== 매수주문 원장 응답정보 출력 종료 ===========\n", 0);
+
+                g_flag_sell = 1;
+            }
+
+            if (e.sRQName == "매도취소주문")
+            {
+                write_msg_log("\n=========== 매도취소주문 원장 응답정보 출력 시작 ===========\n", 0);
+                write_msg_log("sScrNo  : [ " + e.sScrNo + " ]" + "\n", 0);
+                write_msg_log("sRQName : [ " + e.sRQName + " ]" + "\n", 0);
+                write_msg_log("sTrCode : [ " + e.sTrCode + " ]" + "\n", 0);
+                write_msg_log("sMsg    : [ " + e.sMsg + " ]" + "\n", 0);
+                write_msg_log("\n=========== 매도취소주문 원장 응답정보 출력 종료 ===========\n", 0);
+
+                g_flag_cancel_sell = 1;
+            }
         }
         
         private void DKHOpenAPI1_OnReceiveChejanData(object sender, AxKHOpenAPILib._DKHOpenAPIEvents_OnReceiveChejanDataEvent e)
@@ -172,6 +287,151 @@ namespace TaewooBot
             write_msg_log("주문가능금액 : [" + g_ord_amt_possible.ToString() + "]\n", 0);
         }
 
+        // 계좌 정보 테이블 설정
+        public void set_tb_accnt_info()
+        {
+            OracleCommand cmd;
+            OracleConnection conn;
+            string sql;
+            int for_cnt = 0;
+            int for_flag = 0;
+
+            sql = null;
+            cmd = null;
+
+            conn = null;
+            conn = connect_db();
+
+            cmd = new OracleCommand();
+            cmd.Connection = conn;   // DB 연결 시작
+            cmd.CommandType = CommandType.Text;
+
+            sql = @"DELETE FROM TB_ACCNT_INFO WHERE ref_dt = to_char(sysdate, 'yyyymmdd') AND user_id = " + "'" + g_user_id + "'"; // 당일기준 계좌정보 삭제
+
+            cmd.CommandText = sql;
+
+            try
+            {
+                cmd.ExecuteNonQuery();
+            }
+            catch (Exception ex)
+            {
+                write_sys_log("당일기준 계좌정보 삭제 중 다음 에러 : [" + ex.Message + "]", 0);
+            }
+
+            conn.Close();  // DB 연결 종료
+
+            g_is_next = 0;
+            for(; ; )
+            {
+                for_flag = 0;
+                for(; ; )
+                {
+                    axKHOpenAPI1.SetInputValue("계좌번호", g_accnt_no);
+                    axKHOpenAPI1.SetInputValue("비밀번호", g_passwd);
+                    axKHOpenAPI1.SetInputValue("상장폐지조회구분", "1");
+                    axKHOpenAPI1.SetInputValue("비밀번호입력매체구분", "00");
+
+                    g_flag_acc_2 = 0;
+                    g_rqname = "계좌평가현황요청";
+
+                    String scr_no = get_scr_no();
+
+                    // 계좌정보 테이터 수신 요청
+                    axKHOpenAPI1.CommRqData(g_rqname, "OPW00004", g_is_next, scr_no);  // OnReceiveTrData 함수 호출
+
+                    for_cnt = 0;
+                    for(; ; )
+                    {
+                        if(g_flag_acc_2 == 1)
+                        {
+                            delay(1000);
+                            axKHOpenAPI1.DisconnectRealData(scr_no);
+                            for_flag = 1;
+
+                            break;
+                        }
+                        else
+                        {
+                            delay(1000);
+                            for_cnt++;
+                            if(for_cnt == 5)
+                            {
+                                for_flag = 0;
+                                break;
+                            }
+                            else
+                            {
+                                continue;
+                            }
+                        }
+                    }
+                    delay(1000);
+                    axKHOpenAPI1.DisconnectRealData(scr_no);
+
+                    if(for_flag == 1)
+                    {
+                        break;
+                    }
+                    else if(for_flag == 0)
+                    {
+                        delay(1000);
+                        continue;
+                    }
+                }
+
+                if(g_is_next == 0)
+                {
+                    break;
+                }
+                delay(1000);
+            }
+        }
+
+        // 계좌 정보 테이블 삽입
+        public void insert_tb_accnt_info(string jongmok_cd, string jongmok_nm, int buy_price, int own_stock_cnt, int own_amt)
+        {
+            OracleCommand cmd = null;
+            OracleConnection conn = null;
+            string sql = null;
+
+            sql = null;
+            cmd = null;
+            conn = null;
+            conn = connect_db();
+
+            cmd = new OracleCommand();
+            cmd.Connection = conn;
+            cmd.CommandType = CommandType.Text;
+
+            // 계좌정보 테이블 삽입
+            sql = @"INSERT INTO TB_ACCNT_INFO VALUES ( " +
+                    "'" + g_user_id + "'" + "," +
+                    "'" + g_accnt_no + "'" + "," +
+                    "to_char(sysdate, 'yyyymmdd')" + "," +
+                    "'" + jongmok_cd + "'" + "," +
+                    "'" + jongmok_nm + "'" + "," +
+                    "'" + buy_price + "'" + "," +
+                    "'" + own_stock_cnt + "'" + "," +
+                    "'" + own_amt + "'" + "," +
+                    "'taewoobot'" + "," +
+                    "SYSDATE" + "," +
+                    "null" + "," +
+                    "null" + ") ";
+
+            cmd.CommandText = sql;
+
+            try
+            {
+                cmd.ExecuteNonQuery();
+            }
+            catch (Exception ex)
+            {
+                write_sys_log("계좌정보 테이블 삽입 중 다음 에러 발생 : [" + ex.Message + "]\n", 0);
+            }
+
+            conn.Close();  // DB 접속 종료.
+        }
 
         //  현재시간 불러오기
         public string get_cur_tm()
@@ -210,7 +470,7 @@ namespace TaewooBot
             cur_dt = cur_time.ToString("yyyy-") + cur_time.ToString("MM-") + cur_time.ToString("dd");
             cur_tm = get_cur_tm();
 
-            cur_dtm = "\r\n[" + cur_dt + " " + cur_tm + "]";
+            cur_dtm = "[" + cur_dt + " " + cur_tm + "]";
 
             if (is_clear == 1)
             {
@@ -228,12 +488,13 @@ namespace TaewooBot
             {
                 if (this.textBox_msg_log.InvokeRequired)
                 {
-                    textBox_msg_log.BeginInvoke(new Action(() => textBox_msg_log.AppendText(cur_dtm + text)));
+                    textBox_msg_log.BeginInvoke(new Action(() => textBox_msg_log.AppendText("\n" + cur_dtm + text + Environment.NewLine)));
+                    
                 }
 
                 else
                 {
-                    this.textBox_msg_log.AppendText(cur_dtm + text);
+                    this.textBox_msg_log.AppendText("\n" + cur_dtm + text + Environment.NewLine);
                 }
             }
         }
@@ -253,7 +514,7 @@ namespace TaewooBot
             cur_dt = cur_time.ToString("yyyy-") + cur_time.ToString("MM-") + cur_time.ToString("dd");
             cur_tm = get_cur_tm();
 
-            cur_dtm = "\r\n[" + cur_dt + " " + cur_tm + "]";
+            cur_dtm = "[" + cur_dt + " " + cur_tm + "]";
 
             if (is_Clear == 1)
             {
@@ -271,12 +532,12 @@ namespace TaewooBot
             {
                 if (this.textBox_err_log.InvokeRequired)
                 {
-                    textBox_err_log.BeginInvoke(new Action(() => textBox_err_log.AppendText(cur_dtm + text)));
+                    textBox_err_log.BeginInvoke(new Action(() => textBox_err_log.AppendText("\n" + cur_dtm + text + Environment.NewLine)));
                 }
 
                 else
                 {
-                    this.textBox_err_log.AppendText(cur_dtm + text);
+                    this.textBox_err_log.AppendText("\n" + cur_dtm + text + Environment.NewLine);
                 }
             }
         }
@@ -301,7 +562,7 @@ namespace TaewooBot
                 }
                 catch (AccessViolationException ex)
                 {
-                    write_msg_log("delay() ex.Message : [" + ex.Message + "]\n", 0);
+                    write_msg_log("delay() ex.Message : [" + ex.Message + "]\r\n", 0);
                 }
 
                 ThisMoment = DateTime.Now;
@@ -405,9 +666,8 @@ namespace TaewooBot
         {
             g_accnt_no = comboBox1.SelectedItem.ToString().Trim();
             write_sys_log("로그인 성공 성투하세요!.\n", 0);
-            write_msg_log(
-                "사용자 아이디   : [" + g_user_id + "]" +
-                "사용자 계좌번호 : [" + g_accnt_no + "]\n", 0);
+            write_msg_log("사용자 아이디   : [" + g_user_id + "]\n", 0);
+            write_msg_log("사용자 계좌번호 : [" + g_accnt_no + "]\n", 0);
         }
 
         // 거래종목 조회
@@ -469,7 +729,7 @@ namespace TaewooBot
             }
             catch (Exception ex)
             {
-                write_sys_log("SELECT TB_TRD_JONGMOK ex.Message : [" + ex.Message + "]\n", 0);
+                write_sys_log("SELECT TB_TRD_JONGMOK ex.Message : [" + ex.Message + "]\r\n", 0);
             }
 
             // Data 변수 초기화
@@ -529,7 +789,7 @@ namespace TaewooBot
                         dataGridView1.Rows.Add(arr);  // 데이터그리드뷰에 데이터 추가
                     }));
 
-                write_sys_log("거래종목(TB_TRD_JONGMOK)이 조회되었습니다. \n", 0);
+                write_sys_log("거래종목(TB_TRD_JONGMOK)이 조회되었습니다. \r\n", 0);
             }
         }
 
@@ -608,7 +868,7 @@ namespace TaewooBot
                                        + ex.Message + "]", 0);
                     }
 
-                    write_sys_log("종목코드 : [" + jongmok_cd + "]" + "(이)가 삽입되었습니다\n", 0);
+                    write_sys_log("종목코드 : [" + jongmok_cd + "]" + "(이)가 삽입되었습니다\r\n", 0);
                 }
             }
         }
@@ -686,7 +946,7 @@ namespace TaewooBot
                         write_msg_log("거래종목 수정(Update TB_JONGMOK) 중 에러발생 : [" + ex.Message + "]", 0);
                     }
 
-                    write_msg_log("종목코드 [" + jongmok_cd + "] 가 수정되었습니다\n", 0);
+                    write_msg_log("종목코드 [" + jongmok_cd + "] 가 수정되었습니다\r\n", 0);
                 }
             }
         }
@@ -735,7 +995,7 @@ namespace TaewooBot
                         write_msg_log("거래종목 삭제(DELTE TB_JONGMOK) 중 에러발생 : [" + ex.Message + "]", 0);
                     }
 
-                    write_msg_log("종목코드 [" + jongmok_cd + "] 가 삭제되었습니다\n", 0);
+                    write_msg_log("종목코드 [" + jongmok_cd + "] 가 삭제되었습니다\r\n", 0);
                 }
             }
         }
@@ -750,7 +1010,7 @@ namespace TaewooBot
                 return;
             }
 
-            write_sys_log("AUTO TRADING SYSTEM is just started \n", 0);
+            write_sys_log("AUTO TRADING SYSTEM is just started \r\n", 0);
             g_is_thread = 1;
             thread1 = new Thread(new ThreadStart(m_thread1));
             thread1.Start();
@@ -761,8 +1021,9 @@ namespace TaewooBot
         {
             string cur_tm = null;
             int set_tb_accnt_flag = 0; // 1이면 호출 완료
+            int set_tb_accnt_info_flag = 0; // 1이면 호출 완료
 
-            if(g_is_thread == 0)
+            if (g_is_thread == 0)
             {
                 g_is_thread = 1;
                 //write_sys_log("Start AUTO Trading Thread\n", 0);
@@ -772,13 +1033,21 @@ namespace TaewooBot
             {
                 cur_tm = get_cur_tm(); // 현재시각 조회
 
-                // test //
+                //--------------------------------- test --------------------------//
+                
                 if (set_tb_accnt_flag == 0)
                 {
                     set_tb_accnt_flag = 1;
                     set_tb_accnt();
                 }
-                // test //
+
+                if (set_tb_accnt_info_flag == 0)
+                {
+                    set_tb_accnt_info_flag = 1;
+                    set_tb_accnt_info();
+                }
+
+                //--------------------------------- test --------------------------//
 
                 if (cur_tm.CompareTo("083001") >= 0)
                 {
@@ -787,6 +1056,11 @@ namespace TaewooBot
                     {
                         set_tb_accnt_flag = 1;
                         set_tb_accnt();
+                    }
+                    if(set_tb_accnt_info_flag == 0)
+                    {
+                        set_tb_accnt_info_flag = 1;
+                        set_tb_accnt_info();
                     }
                 }
 
@@ -800,7 +1074,7 @@ namespace TaewooBot
                             break;
                         }
 
-                        // 장 중 매수 op 매도 실행
+                        // 장 중 매수 or 매도 실행
                         delay(2000);  // 장중 무한루프 2초씩 sleep
 
                     }
@@ -817,7 +1091,7 @@ namespace TaewooBot
                 return;
             }
 
-            write_sys_log("Stop AUTO TRADING\n", 0);
+           // write_sys_log("Stop AUTO TRADING \r\n", 0);
 
             try
             {
@@ -826,7 +1100,7 @@ namespace TaewooBot
 
             catch (Exception ex)
             {
-                write_sys_log("자동매매 중지 중 오류발생 : [" + ex.Message + "]\n", 0);
+                write_sys_log("자동매매 중지 중 오류발생 : [" + ex.Message + "]\r\n", 0);
             }
 
             this.Invoke(new MethodInvoker(() =>
@@ -839,7 +1113,7 @@ namespace TaewooBot
             }));
 
             g_is_thread = 0;
-            write_sys_log("Stopped AUTO TRADING\n", 0);
+            write_sys_log("Stopped AUTO TRADING \r\n", 0);
         }
 
     }
