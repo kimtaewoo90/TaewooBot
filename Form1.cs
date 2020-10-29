@@ -19,6 +19,8 @@ using System.Xml;
 
 using System.Threading;
 using System.Drawing.Drawing2D;
+using System.Configuration;
+using System.Windows.Forms.VisualStyles;
 
 namespace TaewooBot
 {
@@ -212,7 +214,145 @@ namespace TaewooBot
         
         private void DKHOpenAPI1_OnReceiveChejanData(object sender, AxKHOpenAPILib._DKHOpenAPIEvents_OnReceiveChejanDataEvent e)
         {
+            if(e.sGubun == "0")  // sGubun 값이 "0"이면 주문내역 및 체결내역 수신 성공
+            {
+                string chejan_gb = "";
+                chejan_gb = axKHOpenAPI1.GetChejanData(913).Trim();  // 주문내역 or 체결내역 인지 구분하는 변수
 
+                if(chejan_gb == "접수") // 주문내역
+                {
+                    string user_id = null;
+                    string jongmok_cd = null;
+                    string jongmok_nm = null;
+                    string ord_gb = null;
+                    string ord_no = null;
+                    string org_ord_no = null;
+                    string ref_dt = null;
+                    int ord_price = 0;
+                    int ord_stock_cnt = 0;
+                    int ord_amt = 0;
+                    string ord_dtm = null;
+
+                    user_id = g_user_id;
+                    jongmok_cd = axKHOpenAPI1.GetChejanData(9001).Trim().Substring(1, 6);
+                    jongmok_nm = get_jongmok_nm(jongmok_cd);
+                    ord_gb = axKHOpenAPI1.GetChejanData(907).Trim();
+                    ord_no = axKHOpenAPI1.GetChejanData(9203).Trim();
+                    org_ord_no = axKHOpenAPI1.GetChejanData(904).Trim();
+                    ord_price = int.Parse(axKHOpenAPI1.GetChejanData(901).Trim());
+                    ord_stock_cnt = int.Parse(axKHOpenAPI1.GetChejanData(900).Trim());
+                    ord_amt = ord_price * ord_stock_cnt;
+
+                    DateTime CurTime;
+                    string CurDt;
+                    CurTime = DateTime.Now;
+                    CurDt = CurTime.ToString("yyyy") + CurTime.ToString("MM") + CurTime.ToString("dd");
+                    ref_dt = CurDt;
+                    ord_dtm = CurDt + axKHOpenAPI1.GetChejanData(908).Trim();
+
+                    write_msg_log("========== 주문내역 ==========\n", 0);
+                    write_msg_log("종목코드 : [ " + jongmok_cd + " ]" + "\n", 0);
+                    write_msg_log("종목명 : [ " + jongmok_nm + " ]" + "\n", 0);
+                    write_msg_log("주문구분 : [ " + ord_gb + " ]" + "\n", 0);
+                    write_msg_log("주문번호 : [ " + ord_no + " ]" + "\n", 0);
+                    write_msg_log("원주문번호 : [ " + org_ord_no + " ]" + "\n", 0);
+                    write_msg_log("주문금액(1주) : [ " + ord_price.ToString() + " ]" + "\n", 0);
+                    write_msg_log("주문주식수 : [ " + ord_stock_cnt.ToString() + " ]" + "\n", 0);
+                    write_msg_log("주문금액(총) : [ " + ord_amt.ToString() + " ]" + "\n", 0);
+                    write_msg_log("주문시간 : [ " + ord_dtm + " ]" + "\n", 0);
+
+                    insert_tb_ord_lst(ref_dt, jongmok_cd, jongmok_nm, ord_gb, ord_no, org_ord_no, ord_price, ord_stock_cnt, ord_amt, ord_dtm);
+
+                    // 체결이 아니고 주문접수 일 때 업데이트를 하는건가?
+                    if(ord_gb == "2") // 매수주문일 경우
+                    {
+                        update_tb_accnt(ord_gb, ord_amt);
+                    }
+                }
+
+                else if(chejan_gb == "체결")
+                {
+                    string user_id = null;
+                    string jongmok_cd = null;
+                    string jongmok_nm = null;
+                    string chegyul_gb = null;
+                    int chegyul_no = 0;
+                    int chegyul_price = 0;
+                    int chegyul_cnt = 0;
+                    int chegyul_amt = 0;
+                    string chegyul_dtm = null;
+                    string ord_no = null;
+                    string org_ord_no = null;
+                    string ref_dt = null;
+
+                    user_id = g_user_id;
+                    jongmok_cd = axKHOpenAPI1.GetChejanData(9001).Trim().Substring(1, 6);
+                    jongmok_nm = get_jongmok_nm(jongmok_cd);
+                    chegyul_gb = axKHOpenAPI1.GetChejanData(907).Trim();  // 2:buy, 1:sell
+                    chegyul_no = int.Parse(axKHOpenAPI1.GetChejanData(909).Trim());
+                    chegyul_price = int.Parse(axKHOpenAPI1.GetChejanData(910).Trim());
+                    chegyul_cnt = int.Parse(axKHOpenAPI1.GetChejanData(911).Trim());
+                    chegyul_amt = chegyul_price * chegyul_cnt;
+                    org_ord_no = axKHOpenAPI1.GetChejanData(904).Trim();
+
+                    DateTime CurTime;
+                    string CurDt;
+
+                    CurTime = DateTime.Now;
+                    CurDt = CurTime.ToString("yyyy") + CurTime.ToString("MM") + CurTime.ToString("dd");
+                    ref_dt = CurDt;
+                    chegyul_dtm = CurDt + axKHOpenAPI1.GetChejanData(908).Trim();
+                    ord_no = axKHOpenAPI1.GetChejanData(9203).Trim();
+
+                    write_msg_log("========== 체결내역 ==========\n", 0);
+                    write_msg_log("종목코드 : [ " + jongmok_cd + " ]" + "\n", 0);
+                    write_msg_log("종목명 : [ " + jongmok_nm + " ]" + "\n", 0);
+                    write_msg_log("체결구분 : [ " + chegyul_gb + " ]" + "\n", 0);
+                    write_msg_log("체결번호 : [ " + chegyul_no.ToString() + " ]" + "\n", 0);
+                    write_msg_log("체결가 : [ " + chegyul_price.ToString() + " ]" + "\n", 0);
+                    write_msg_log("체결주식수 : [ " + chegyul_cnt.ToString() + " ]" + "\n", 0);
+                    write_msg_log("체결금액 : [ " + chegyul_amt.ToString() + " ]" + "\n", 0);
+                    write_msg_log("체결시간 : [ " + chegyul_dtm + " ]" + "\n", 0);
+                    write_msg_log("주문번호 : [ " + ord_no + " ]" + "\n", 0);
+                    write_msg_log("원주문번호 : [ " + org_ord_no + " ]" + "\n", 0);
+
+                    // 체결내역 저장
+                    insert_tb_chegyul_lst(ref_dt, jongmok_cd, jongmok_nm, chegyul_gb, chegyul_no, 
+                        chegyul_price, chegyul_cnt, chegyul_amt, chegyul_dtm, ord_no, org_ord_no);
+
+                    if (chegyul_gb == "1")
+                    {
+                        update_tb_accnt(chegyul_gb, chegyul_amt);
+                    }
+                }
+            }  // if(e.sGubun == "0") 종료
+
+            if(e.sGubun == "1") // 1: 계좌정보 수신
+            {
+                string user_id = null;
+                string jongmok_cd = null;
+
+                int boyu_cnt = 0;
+                int boyu_price = 0;
+                int boyu_amt = 0;
+
+                user_id = g_user_id;
+                jongmok_cd = axKHOpenAPI1.GetChejanData(9001).Trim().Substring(1, 6);
+                boyu_cnt = int.Parse(axKHOpenAPI1.GetChejanData(930).Trim());
+                boyu_price = int.Parse(axKHOpenAPI1.GetChejanData(931).Trim());
+                boyu_amt = int.Parse(axKHOpenAPI1.GetChejanData(932).Trim());
+
+                string jongmok_nm = null;
+                jongmok_nm = get_jongmok_nm(jongmok_cd);
+
+                write_msg_log("종목코드 : [ " + jongmok_cd + " ]" + "\n", 0);
+                write_msg_log("보유주식수 : [ " + boyu_cnt.ToString() + " ]" + "\n", 0);
+                write_msg_log("보유가 : [ " + boyu_price.ToString() + " ]" + "\n", 0);
+                write_msg_log("보유금액 : [ " + boyu_amt.ToString() + " ]" + "\n", 0);
+
+                merge_tb_accnt_info(jongmok_cd, jongmok_nm, boyu_cnt, boyu_price, boyu_amt);  // 계좌정보(보유정보) 저장.
+
+            }  // if(e.sGubun == "1") 종료
         }
         
         // 계좌 테이블 세팅 메서드
@@ -431,6 +571,223 @@ namespace TaewooBot
             }
 
             conn.Close();  // DB 접속 종료.
+        }
+
+        // 주문내역 저장 메서드
+        public void insert_tb_ord_lst(string ref_dt, string jongmok_cd, string jongmok_nm, string ord_gb, string ord_no, string org_ord_no, 
+                                      int ord_price, int ord_stock_cnt, int ord_amt, string ord_dtm)
+        {
+            OracleCommand cmd = null;
+            OracleConnection conn = null;
+            string sql = null;
+
+            sql = null;
+            cmd = null;
+            conn = null;
+
+            conn = connect_db();
+
+            cmd = new OracleCommand();
+            cmd.Connection = conn;
+            cmd.CommandType = CommandType.Text;
+
+            // 주문내역 저장
+            sql = "insert into tb_ord_lst values ( " +
+                "'" + g_user_id + "'" + "," +
+                "'" + g_accnt_no + "'" + "," +
+                "'" + ref_dt + "'" + "," +
+                "'" + jongmok_cd + "'" + "," +
+                "'" + jongmok_nm + "'" + "," +
+                "'" + ord_gb + "'" + "," +
+                "'" + ord_no + "'" + "," +
+                "'" + org_ord_no + "'" + "," +
+                ord_price + "," +
+                ord_stock_cnt + "," +
+                ord_amt + "," +
+                "'" + ord_dtm + "'" + "," +
+                "'taewoobot'" + "," +
+                "SYSDATE" + "," +
+                "null" + "," +
+                "null" + ") ";
+
+            cmd.CommandText = sql;
+
+            try
+            {
+                cmd.ExecuteNonQuery();
+                write_sys_log("주문내역 저장 성공\n", 0);
+            }
+
+            catch (Exception ex)
+            {
+                write_sys_log("주문내역 저장 중 다음 에러 발생 : [ " + ex.Message + " ]\n", 0);
+            }
+
+            conn.Close();
+        }
+
+        // 계좌테이블 Update 메서드 (주문가능금액 수정)
+        public void update_tb_accnt(string chegyul_gb, int chegyul_amt)
+        {
+            OracleCommand cmd = null;
+            OracleConnection conn = null;
+            string sql = null;
+
+            sql = null;
+            cmd = null;
+            conn = null;
+
+            conn = connect_db();
+
+            cmd = new OracleCommand();
+            cmd.Connection = conn;
+            cmd.CommandType = CommandType.Text;
+
+            if(chegyul_gb == "2") // 매수인 경우 주문가능금액에서 체결금액 빼기
+            {
+                sql = @"update TB_ACCNT set ORD_POSSIBLE_AMT =  ord_possible_amt - "
+                    + chegyul_amt + ", updt_dtm = SYSDATE, updt_id = 'taewoobot' " +
+                    " where user_id = " + "'" + g_user_id + "'" +
+                    " and accnt_no = " + "'" + g_accnt_no + "'" +
+                    " and ref_dt = to_char(sysdate, 'yyyymmdd') ";
+            }
+
+            cmd.CommandText = sql;
+
+            try
+            {
+                cmd.ExecuteNonQuery();
+                write_sys_log("매수체결 후 주문가능금액 수정 완료\n", 0);
+            }
+
+            catch (Exception ex)
+            {
+                write_sys_log("주문가능금액 수정 중 다음 에러 발생 : [ " + ex.Message + " ]\n", 0);
+            }
+
+            conn.Close();
+        }
+
+        // 체결내역 저장 메서드
+        public void insert_tb_chegyul_lst(string ref_dt, string jongmok_cd, string jongmok_nm, string chegyul_gb,
+                                            int chegyul_no, int chegyul_price, int chegyul_stock_cnt, int chegyul_amt, string chegyul_dtm, string ord_no, string org_ord_no)
+        {
+            OracleCommand cmd = null;
+            OracleConnection conn = null;
+            string sql = null;
+
+            sql = null;
+            cmd = null;
+            conn = null;
+
+            conn = connect_db();
+
+            cmd = new OracleCommand();
+            cmd.Connection = conn;
+            cmd.CommandType = CommandType.Text;
+
+            sql = "insert into tb_chegyul_lst values ( " +
+                    "'" + g_user_id + "'" + "," +
+                    "'" + g_accnt_no + "'" + "," +
+                    "'" + ref_dt + "'" + "," +
+                    "'" + jongmok_cd + "'" + "," +
+                    "'" + jongmok_nm + "'" + "," +
+                    "'" + chegyul_gb + "'" + "," +
+                    "'" + ord_no + "'" + "," +
+                    "'" + chegyul_gb + "'" + "," +
+                    chegyul_no + "," +
+                    chegyul_price + "," +
+                    chegyul_stock_cnt + "," +
+                    chegyul_amt + "," +
+                    "'" + chegyul_dtm + "'" + "," +
+                    "'taewoobot'" + "," +
+                    "SYSDATE" + "," +
+                    "null" + "," +
+                    "null" + ") ";
+
+            cmd.CommandText = sql;
+
+            try
+            {
+                cmd.ExecuteNonQuery();
+                write_sys_log("체결내역 저장 성공\n", 0);
+            }
+
+            catch (Exception ex)
+            {
+                write_sys_log("체결내역 저장 중 다음 에러 발생 : [ " + ex.Message + " ]\n", 0);
+            }
+
+            conn.Close();
+        }
+
+
+        // 계좌정보 테이블 세팅 메서드
+        public void merge_tb_accnt_info(string jongmok_cd, string jongmok_nm, int boyu_cnt, int boyu_price, int boyu_amt)
+        {
+            OracleCommand cmd = null;
+            OracleConnection conn = null;
+            string sql = null;
+
+            sql = null;
+            cmd = null;
+            conn = null;
+
+            conn = connect_db();
+
+            cmd = new OracleCommand();
+            cmd.Connection = conn;
+            cmd.CommandType = CommandType.Text;
+
+            // 계좌정보 테이블 세팅, 기존에 보유한 종목이면 갱신, 보유하지 않았으면 신규로 삽입
+            sql = @"merge into TB_ACCNT_INFO a 
+                    using (
+                         select nvl(max(user_id), '0') user_id, 
+                                nvl(max(ref_dt), '0') ref_dt
+                                nvl(max(jongmok_cd), '0') jongmok_cd
+                                nvl(max(jongmok_nm), '0') jongmok_nm
+                         from TB_ACCNT_INFO
+                         where user_id = '" + g_user_id + "'" +
+                         " and ACCNT_NO = '" + g_accnt_no + "'" +
+                         " and jongmok_cd = '" + jongmok_cd + "'" +
+                         " and ref_dt = to_char(sysdate, 'yyyymmdd') " +
+                         " ) b " +
+                         " on (a.user_id = b.user_id and a.jongmok_cd = b.jongmok_cd and a.ref_dt = b.ref_dt) " +
+                         "when matched then update " +
+                         " set OWN_STOCK_CNT = " + boyu_cnt + "," +
+                         " BUY_PRICE = " + boyu_price + "," +
+                         " OWN_AMT = " + boyu_amt + "," +
+                         " updt_dtm = SYSDATE " + "," +
+                         " updt_id = 'taewoobot'" +
+                         " when not matched then isert " +
+                         "(a.user_id, a.accnt_no, a.ref_dt, a.jongmok_cd, a.jongmok.nm, a.BUY_PRICE, a.OWN_STOCK_CNT, a.OWN_AMT, a.inst_dtm, a.inst_id)" +
+                         " values ( " +
+                         " '" + g_user_id + "'" + "," +
+                         " '" + g_accnt_no + "'" + "," +
+                         " to_char(sysdate, 'yyyymmdd')" + "," +
+                         " '" + jongmok_cd + "'" + "," +
+                         " '" + jongmok_nm + "'" + "," +
+                         boyu_price + "," +
+                         boyu_cnt + "," +
+                         boyu_amt + "," +
+                         " SYSDATE" + "," +
+                         " 'taewoobot'" +
+                         " ) ";
+
+            cmd.CommandText = sql;
+
+            try
+            {
+                cmd.ExecuteNonQuery();
+                write_sys_log("계좌정보 테이블 수정 완료\n", 0);
+            }
+
+            catch (Exception ex)
+            {
+                write_sys_log("계좌정보 테이블 업데이트 중 다음 에러 발생 : [ " + ex.Message + " ]\n", 0);
+            }
+
+            conn.Close();
         }
 
         //  현재시간 불러오기
