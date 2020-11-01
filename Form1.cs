@@ -721,7 +721,6 @@ namespace TaewooBot
             conn.Close();
         }
 
-
         // 계좌정보 테이블 세팅 메서드
         public void merge_tb_accnt_info(string jongmok_cd, string jongmok_nm, int boyu_cnt, int boyu_price, int boyu_amt)
         {
@@ -800,6 +799,67 @@ namespace TaewooBot
             cur_tm = cur_time.ToString("HH:mm:ss");
 
             return cur_tm;
+        }
+
+        // 계좌정보 보유종목의 매도주문 메서드
+        public void sell_ord_first()
+        {
+            OracleCommand cmd = null;
+            OracleConnection conn = null;
+            string sql = null;
+            OracleDataReader reader = null;
+
+            string jongmok_cd = null;
+            int buy_price = 0;
+            int own_stock_cnt = 0;
+            int target_price = 0;
+
+            conn = null;
+            conn = connect_db();
+
+            cmd = new OracleCommand();
+            cmd.Connection = conn;
+            cmd.CommandType = CommandType.Text;
+
+            // TB_ACCNT_INFO와 TB_TRD_JONGMOK 테이블 조인하여 매도대상 종목 조회
+            sql = "SELECT " +
+                  "     A.JONGMOK_CD, " +
+                  "     A.BUY_PRICE, " +
+                  "     A.OWN_STOCK_CNT, " +
+                  "     B.TARGET_PRICE " +
+                  " FROM TB_ACCNT_INFO A, " +
+                  "      TB_TRD_JKONGMOK B " +
+                  " WHERE A.USER_ID = " + "'" + g_user_id + "' " +
+                  " AND   A.ACCNT_NO = " + "'" + g_accnt_no + "' " +
+                  " AND   A.REF_DT = " + "TO_CHAR(SYSDATE, 'yyyymmdd') " +
+                  " AND   A.USER_ID = " + "B.USER_ID " +
+                  " AND   A.JONGMOK_CD = " + "B.JONGMOK_CD " +
+                  " AND   A.SELL_TRD_YN = 'Y' AND " + "A.OWN_STOCK_CNT > 0 ";
+
+            cmd.CommandText = sql;
+            reader = cmd.ExecuteReader();
+
+            while (reader.Read())
+            {
+                jongmok_cd = "";
+                buy_price = 0;
+                own_stock_cnt = 0;
+                target_price = 0;
+
+                jongmok_cd = reader[0].ToString().Trim();
+                buy_price = int.Parse(reader[1].ToString().Trim());
+                own_stock_cnt = int.Parse(reader[2].ToString().Trim());
+                target_price = int.Parse(reader[3].ToString().Trim());
+
+                write_msg_log("======= 장 시작전 매도대상 종목 조회 ========\n", 0);
+                write_msg_log("종목명 : [" + get_jongmok_nm(jongmok_cd) + "]\n", 0);
+                write_msg_log("매입가 : [" + buy_price + "]\n", 0);
+                write_msg_log("보유주식수 : [" + own_stock_cnt + "]\n", 0);
+                write_msg_log("목표가 : [" + target_price + "]\n", 0);
+            }
+            reader.Close();
+            conn.Close();
+
         }
 
 
