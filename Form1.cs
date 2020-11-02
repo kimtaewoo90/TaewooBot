@@ -21,6 +21,7 @@ using System.Threading;
 using System.Drawing.Drawing2D;
 using System.Configuration;
 using System.Windows.Forms.VisualStyles;
+using System.Runtime.Remoting.Messaging;
 
 namespace TaewooBot
 {
@@ -856,12 +857,224 @@ namespace TaewooBot
                 write_msg_log("매입가 : [" + buy_price + "]\n", 0);
                 write_msg_log("보유주식수 : [" + own_stock_cnt + "]\n", 0);
                 write_msg_log("목표가 : [" + target_price + "]\n", 0);
+
+                int new_target_price = 0;
+                new_target_price = get_hoga_unit_price(target_price, jongmok_cd, 0);
+
+                g_flag_sell = 0;
+                g_rqname = "매도주문";
+
+                string scr_no = null;
+                scr_no = "";
+                scr_no = get_scr_no();
+
+                int ret = 0;
+
+                // 매도주문 요청
+                ret = axKHOpenAPI1.SendOrder("매도주문", scr_no, g_accnt_no, 2, jongmok_cd, own_stock_cnt, new_target_price, "00", "");
+                if(ret == 0)
+                {
+                    write_msg_log("매도주문 호출 성공\n", 0);
+                    write_msg_log("종목코드 : [ " + get_jongmok_nm(jongmok_cd) + " ]\n", 0);
+                }
+                else
+                {
+                    write_msg_log("매도주문 호출 실패\n", 0);
+                    write_msg_log("종목코드 : [ " + get_jongmok_nm(jongmok_cd) + " ]\n", 0);
+                }
+
+                delay(200);
+
+                for(; ; )
+                {
+                    if(g_flag_sell == 1)
+                    {
+                        delay(200);
+                        axKHOpenAPI1.DisconnectRealData(scr_no);
+                        break;
+                    }
+                    else
+                    {
+                        write_msg_log("'매도주문' 완료 대기중...\n", 0);
+                        delay(200);
+                        break;
+                    }
+                }
+                axKHOpenAPI1.DisconnectRealData(scr_no);
             }
             reader.Close();
             conn.Close();
 
         }
 
+
+        // 호가가격단위 가져오기 메서드
+        public int get_hoga_unit_price(int price, string jongmok_cd, int hoga_unit_jump)
+        {
+            int market_type;
+            int rest;
+
+            market_type = 0;
+
+            try
+            {
+                // 시장구분 가져오기
+                market_type = int.Parse(axKHOpenAPI1.GetMarketType(jongmok_cd).ToString());
+            }
+
+            catch (Exception ex)
+            {
+                write_sys_log("호가단위 가져오는 중 다음 에러 발생 : [ " + ex.Message + "]\n", 0);
+            }
+
+            // 천원 미만
+            if(price < 1000)
+            {
+                return price + (hoga_unit_jump * 1);
+            }
+            // 천원 이상 오천원 미만
+            else if(1000 <= price && price < 5000)
+            {
+                rest = price % 5;
+                if(rest == 0)
+                {
+                    return price + (hoga_unit_jump * 5);
+                }
+                else if (rest < 3)
+                {
+                    return (price - rest) + (hoga_unit_jump * 5);
+                }
+                else
+                {
+                    return (price + (5-rest)) + (hoga_unit_jump *5);
+                }
+            }
+            // 오천원 이상 만원 미만
+            else if(price >= 5000 && price < 10000)
+            {
+                rest = price % 10;
+                if(rest == 0)
+                {
+                    return price + (hoga_unit_jump * 10);
+                }
+                else if (rest < 5)
+                {
+                    return (price - rest) + (hoga_unit_jump * 10);
+                }
+                else
+                {
+                    return (price + (10 - rest)) + (hoga_unit_jump * 10);
+                }
+            }
+            // 만원 이상 오만원 미만
+            else if(price >= 10000 && price < 50000)
+            {
+                rest = price % 50000;
+                if(rest == 0)
+                {
+                    return price + (hoga_unit_jump * 50);
+                }
+                else if(rest < 25)
+                {
+                    return (price - rest) + (hoga_unit_jump * 50);
+                }
+                else
+                {
+                    return (price + (50 - rest)) + (hoga_unit_jump * 50);
+                }
+            }
+            // 오만원 이상 십만원 미만
+            else if(price >= 50000 && price < 100000)
+            {
+                rest = price % 100;
+                if(rest == 0)
+                {
+                    return price + (hoga_unit_jump * 100);
+                }
+                else if(rest < 50)
+                {
+                    return (price - rest) + (hoga_unit_jump * 100);
+                }
+                else
+                {
+                    return (price + (100 - rest)) + (hoga_unit_jump * 100);
+                }
+            }
+            // 십만원 이상 오십만원 미만 (장 구분)
+            else if(price >= 100000 && price < 500000)
+            {
+                if(market_type == 10)
+                {
+                    rest = price % 100;
+                    if(rest == 0)
+                    {
+                        return price + (hoga_unit_jump * 100);
+                    }
+                    else if (rest < 50)
+                    {
+                        return (price - rest) + (hoga_unit_jump * 100);
+                    }
+                    else
+                    {
+                        return (price + (100 - rest)) + (hoga_unit_jump * 100);
+                    }
+                }
+                else
+                {
+                    rest = price % 500;
+                    if(rest == 0)
+                    {
+                        return price + (hoga_unit_jump * 500);
+                    }
+                    else if( rest < 250)
+                    {
+                        return (price - rest) + (hoga_unit_jump * 500);
+                    }
+                    else
+                    {
+                        return (price + (500 - rest)) + (hoga_unit_jump * 500);
+                    }
+                }
+            }
+            // 50만원 이상
+            else if (price >= 500000)
+            {
+                if (market_type == 10)
+                {
+                    rest = price % 100;
+                    if (rest == 0)
+                    {
+                        return price + (hoga_unit_jump * 100);
+                    }
+                    else if (rest < 50)
+                    {
+                        return (price - rest) + (hoga_unit_jump * 100);
+                    }
+                    else
+                    {
+                        return (price + (100 - rest)) + (hoga_unit_jump * 100);
+                    }
+                }
+                else
+                {
+                    rest = price % 1000;
+                    if (rest == 0)
+                    {
+                        return price + (hoga_unit_jump * 1000);
+                    }
+                    else if (rest < 500)
+                    {
+                        return (price - rest) + (hoga_unit_jump * 1000);
+                    }
+                    else
+                    {
+                        return (price + (1000 - rest)) + (hoga_unit_jump * 1000);
+                    }
+                }
+            }
+
+            return 0;
+        }
 
         // 종목 이름 가져오기
         public string get_jongmok_nm(string jongmok_cd)
@@ -1440,6 +1653,8 @@ namespace TaewooBot
             int set_tb_accnt_flag = 0; // 1이면 호출 완료
             int set_tb_accnt_info_flag = 0; // 1이면 호출 완료
 
+            int sell_ord_first_flag = 0; // 장시작전 매도주문 flag.
+
             if (g_is_thread == 0)
             {
                 g_is_thread = 1;
@@ -1478,6 +1693,11 @@ namespace TaewooBot
                     {
                         set_tb_accnt_info_flag = 1;
                         set_tb_accnt_info();
+                    }
+                    if(sell_ord_first_flag == 0)
+                    {
+                        sell_ord_first(); // 보유종목 매도
+                        sell_ord_first_flag = 1;
                     }
                 }
 
