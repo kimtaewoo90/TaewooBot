@@ -907,6 +907,254 @@ namespace TaewooBot
 
         }
 
+        // 실시간 매수주문 메서드
+        public void real_buy_ord()
+        {
+            OracleCommand cmd = null;
+            OracleConnection conn = null;
+            string sql = null;
+            OracleDataReader reader = null;
+
+            string jongmok_cd = null;
+            int buy_amt = 0;
+            int buy_price = 0;
+
+            conn = null;
+            conn = connect_db();
+
+            sql = null;
+            cmd = null;
+            reader = null;
+
+            cmd = new OracleCommand();
+            cmd.Connection = conn;
+            cmd.CommandType = CommandType.Text;
+
+            // 거래종목 테이블 조회
+            sql = "SELECT " +
+                    " A.JONGMOK_CD, " +
+                    " A.BUY_AMT, " +
+                    " A.BUY_PRICE, " +
+                  "FROM TB_TRD_JONGMOK A " +
+                  "WHERE A.USER_ID = " + "'" + g_user_id + "'" +
+                  "   AND A.BUY_TRD_YN = 'Y' " +
+                  "ORDER BY A.PRIORITY ";
+
+            cmd.CommandText = sql;
+            reader = cmd.ExecuteReader();
+
+            while (reader.Read())
+            {
+                jongmok_cd = "";
+                buy_amt = 0;
+                buy_price = 0;
+
+                jongmok_cd = reader[0].ToString().Trim(); // 종목코드
+                buy_amt = int.Parse(reader[1].ToString().Trim());  // 매수금액
+                buy_price = int.Parse(reader[2].ToString().Trim()); // 매수가
+
+                int buy_price_tmp = 0;
+                buy_price_tmp = get_hoga_unit_price(buy_price, jongmok_cd, 1); // 매수호가 구하기
+
+                int buy_ord_stock_cnt = 0;
+                buy_ord_stock_cnt = (int)(buy_amt / buy_price_tmp); // 매수주문 주식 수 구하기
+
+                write_msg_log("종목코드 : [ " + jongmok_cd + " ]\n", 0);
+                write_msg_log("종목명   : [ " + get_jongmok_nm(jongmok_cd) + " ]\n", 0);
+                write_msg_log("매수금액 : [ " + buy_amt.ToString() + " ]\n", 0);
+                write_msg_log("매수가   : [ " + buy_price.ToString() + " ]\n", 0);
+
+                // 이미 존재하는 종목( from TB_ACCNT_INFO ) 이면 매수 안함
+                int own_stock_cnt = 0;
+                own_stock_cnt = get_own_stock_cnt(jongmok_cd);
+
+                // 여기에 최우선 매수호가 조회 메서드 추가?
+
+                if (own_stock_cnt > 0)
+                {
+                    write_msg_log("보유주식이라 추가 매수 안함\n", 0);
+                    continue;
+                }
+
+                // 매수주문 미체결 수량이 있으면 매수주문 실행 안함
+                string buy_not_chegyul_yn = null;
+                buy_not_chegyul_yn = get_buuy_not_chegyul_yn(jongmok_cd);
+                if(buy_not_chegyul_yn == "Y")
+                {
+                    write_sys_log("해당 종목에 대한 미체결 매수주문이 큐에 남아있으므로 매수하지 않음\n", 0);
+                    continue;
+                }
+
+                g_flag_buy = 0;
+                g_rqname = "매수주문";
+
+                string scr_no = null;
+                scr_no = "";
+                scr_no = get_scr_no();
+
+                int ret = 0;
+
+                // 매수주문 요청
+                ret = axKHOpenAPI1.SendOrder("매수주문", scr_no, g_accnt_no, 1, jongmok_cd, buy_ord_stock_cnt, buy_price, "00", "");
+
+                if(ret == 0)
+                {
+                    write_sys_log("매수주문 SendOrder 호출 성공\n", 0);
+                    write_sys_log("종목코드 : [ " + jongmok_cd + " ]\n", 0);
+                }
+
+                else
+                {
+                    write_sys_log("매수주문 SendOrder 호출 실패\n", 0);
+                    write_sys_log("종목코드 : [ " + jongmok_cd + " ]\n", 0);
+                }
+
+                delay(200); // 0.2초 지연
+
+                for (; ; )
+                {
+                    if (g_flag_buy == 1)
+                    {
+                        delay(200);
+                        axKHOpenAPI1.DisconnectRealData(scr_no);
+                        break;
+                    }
+                    else
+                    {
+                        write_sys_log("매수주문 완료 대기중..\n", 0);
+                        delay(200);
+                        break;
+                    }
+                }
+
+                axKHOpenAPI1.DisconnectRealData(scr_no);
+                delay(1000);
+            }
+
+            reader.Close();
+            conn.Close();
+        }
+
+        // 보유주식수 Call 메서드
+        public int get_own_stock_cnt(string jongmok_cd)
+        {
+            OracleCommand cmd = null;
+            OracleConnection conn = null;
+            string sql = null;
+            OracleDataReader reader = null;
+
+            int own_stock_cnt = 0;
+
+            conn = null;
+            conn = connect_db();
+
+            sql = null;
+            cmd = null;
+            reader = null;
+
+            cmd = new OracleCommand();
+            cmd.Connection = conn;
+            cmd.CommandType = CommandType.Text;
+
+            // 계좌정보 테이블 조회
+            sql = @"SELECT NVL(MAX(OWN_STOCK_CNT), 0) OWN_STOCK_CNT
+                        FROM
+                    TB_ACCNT_INFO
+                        WHERE USER_ID = " + "'" + g_user_id + "'" +
+                        " AND JONGMOK_CD = " + "'" + jongmok_cd + "'" +
+                        " AND ACCNT_NO = " + "'" + g_accnt_no + "'" +
+                        " AND REF_DT = TOCHAR(SYSDATE, 'YYYYMMDD') ";
+            cmd.CommandText = sql;
+
+            reader = cmd.ExecuteReader();
+            reader.Read();
+
+            own_stock_cnt = int.Parse(reader[0].ToString());  // 보유 주식수 구함
+
+            reader.Close();
+            conn.Close();
+
+            return own_stock_cnt;
+        }
+
+        // 매수주문 전 미체결 매수주문 확인 메서드
+        // TODO: sql 확인 작업 필요
+        public string get_buuy_not_chegyul_yn(string jongmok_cd)
+        {
+            OracleCommand cmd = null;
+            OracleConnection conn = null;
+            string sql = null;
+            OracleDataReader reader = null;
+
+            int buy_not_chegyul_ord_stock_cnt = 0;
+            string buy_not_chegyul_yn = null;
+
+            conn = null;
+            conn = connect_db();
+
+            sql = null;
+            cmd = null;
+            reader = null;
+
+            cmd = new OracleCommand();
+            cmd.Connection = conn;
+            cmd.CommandType = CommandType.Text;
+
+            // 주문내역과 체결내역 테이블 조회
+            sql = @"SELECT
+                        NVL(sum(ord_stock_cnt - CHEGYUL_STOCK_CNT), 0) buy_not_chegyul_ord_stock_cnt
+                    FROM
+                        (
+                            SELECT ord_stock_cnt,
+                                ( select nvl(max(b.CHEGYUL_STOCK_CNT), 0) CHEGYUL_STOCK_CNT
+                                    from tb_chegyul_lst b
+                                     where b.user_id = a.user_id
+                                       and b.accnt_no = a.accnt_no
+                                       and b.ref_dt = a.ref_dt
+                                       and b.jongmok_cd = a.jongmok_cd
+                                       and b.ord_gb = a.ord_gb
+                                       and b.ord_no = a.ord_no
+                                )
+                            FROM
+                            TB_ORD_LST a
+                            where a.ref_dt = TO_CHAR(SYSDATE, 'YYYYMMDD')
+                            and a.user_id = " + "'" + g_user_id + "'" +
+                            " and a.ACCNT_NO = " + g_accnt_no + "'" +
+                            " and a.jongmok_cd = " + jongmok_cd + "'" +
+                            " and a.ord_gb = '2' " +
+                            " and a.org_ord_no = '0000000' " +
+                            " and not exists ( select '1' " +
+                            "                   from TB_ORD_LST b" +
+                            "                   where b.user_id = a.user_id " +
+                            "                   and b.accnt_no = a.accnt_no " +
+                            "                   and b.ref_dt = a.ref_dt " +
+                            "                   and b.jongmok_cd = a.jongmok_cd " +
+                            "                   and b.ord_gb = a.ord_gb " +
+                            "                   and b.org_no = a.ord_no " +
+                        " ) " +
+                    ") x ";
+
+            cmd.CommandText = sql;
+
+            reader = cmd.ExecuteReader();
+            reader.Read();
+
+            buy_not_chegyul_ord_stock_cnt = int.Parse(reader[0].ToString());  // 미체결 매수주문 주식수 구하기
+
+            reader.Close();
+            conn.Close();
+
+            if (buy_not_chegyul_ord_stock_cnt > 0)
+            {
+                buy_not_chegyul_yn = "Y";
+            }
+            else
+            {
+                buy_not_chegyul_yn = "N";
+            }
+
+            return buy_not_chegyul_yn;
+        }
 
         // 호가가격단위 가져오기 메서드
         public int get_hoga_unit_price(int price, string jongmok_cd, int hoga_unit_jump)
@@ -1712,6 +1960,7 @@ namespace TaewooBot
                         }
 
                         // 장 중 매수 or 매도 실행
+                        real_buy_ord();
                         delay(2000);  // 장중 무한루프 2초씩 sleep
 
                     }
