@@ -31,7 +31,6 @@ namespace TaewooBot
         // 비밀번호 전역 변수 설정
         string g_passwd = "0070";
 
-
         int g_scr_no = 0;
 
         // 로그인 전역 변수 설정
@@ -60,11 +59,14 @@ namespace TaewooBot
         int g_cur_price = 0; // 현재가
         int g_flag_cur = 0; // 현재가 조회 플래그, 1: 조회완료
 
+        // Strategy1 전역변수
+        List<int> strategy1_lst = new List<int>();
+        int g_flag_liq = 0; // 거래량 조회 플래그
+
         // Form1 class의 생성자
         public Form1()
         {
             InitializeComponent();
-
 
             // TODO
             // 접속 시 바로 로그인
@@ -72,6 +74,8 @@ namespace TaewooBot
             this.axKHOpenAPI1.OnReceiveTrData += new AxKHOpenAPILib._DKHOpenAPIEvents_OnReceiveTrDataEventHandler(this.DKHOpenAPI1_OnReceiveTrData);
             this.axKHOpenAPI1.OnReceiveMsg += new AxKHOpenAPILib._DKHOpenAPIEvents_OnReceiveMsgEventHandler(this.DKHOpenAPI1_OnReceiveMsg);
             this.axKHOpenAPI1.OnReceiveChejanData += new AxKHOpenAPILib._DKHOpenAPIEvents_OnReceiveChejanDataEventHandler(this.DKHOpenAPI1_OnReceiveChejanData);
+
+    
 
         }
 
@@ -105,6 +109,10 @@ namespace TaewooBot
 
                     case "현재가조회":
                         g_flag_cur = 1; // 1로 설정하여 요청하는 쪽이 무한루프에 빠지지 않게 함
+                        break;
+
+                    case "거래량조회":
+                        g_flag_liq = 1;
                         break;
 
                     default: break;
@@ -210,6 +218,12 @@ namespace TaewooBot
                 axKHOpenAPI1.DisconnectRealData(e.sScrNo);
 
                 g_flag_cur = 1;
+            }
+
+            if(e.sRQName == "거래량조회")
+            {
+                strategy1_lst.Add(int.Parse(axKHOpenAPI1.CommGetData(e.sTrCode, "", e.sRQName, 0, "거래량").Trim()));
+                axKHOpenAPI1.DisconnectRealData(e.sScrNo);
             }
 
         }
@@ -1528,7 +1542,7 @@ namespace TaewooBot
                 for(; ; )
                 {
                     g_rqname = "";
-                    g_rqname = "현재가좌회";
+                    g_rqname = "현재가조회";
                     g_flag_cur = 0;
                     axKHOpenAPI1.SetInputValue("종목코드", jongmok_cd);
 
@@ -2542,8 +2556,107 @@ namespace TaewooBot
         }
 
 
+        // -------------------- Strategy1 --------------------  //
+        // 코스닥 종목 조회 메서드
+        public void get_Kosdaq_lst()
+        {
+            string ret = null;
+
+            ret = "";
+            ret = axKHOpenAPI1.GetCodeListByMarket("10");
+            string[] jongmok_lst = ret.Split(';');
+
+     
+            for (int i = 0; i < jongmok_lst.Length; i++)
+            {
+                //write_msg_log(i + "번째 종목 : [ " + jongmok_lst[i] + " ][ " + get_jongmok_nm(jongmok_lst[i]) + " ]\n", 0);
+
+                for (; ; )
+                {
+                    g_rqname = "";
+                    g_rqname = "거래량조회";
+                    g_flag_cur = 0;
+                    axKHOpenAPI1.SetInputValue("종목코드", jongmok_lst[i]);
+
+                    int for_cnt = 0;
+                    int for_flag = 0;
+
+                    string scr_no = null;
+                    scr_no = "";
+                    scr_no = get_scr_no();
+
+                    // 현재가 조회 요청
+                    axKHOpenAPI1.CommRqData(g_rqname, "opt10001", 0, scr_no);
+                    try
+                    {
+                        for_cnt = 0;
+                        for (; ; )
+                        {
+                            if (g_flag_cur == 1)
+                            {
+                                delay(200);
+                                axKHOpenAPI1.DisconnectRealData(scr_no);
+                                for_flag = 1;
+                                break;
+                            }
+                            else
+                            {
+                                write_sys_log("거래량조회 완료 대기중...\n", 0);
+                                delay(200);
+                                for_cnt++;
+                                if (for_cnt == 5)
+                                {
+                                    for_flag = 0;
+                                    break;
+                                }
+                                else
+                                {
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+
+                    catch (Exception ex)
+                    {
+                        write_sys_log("거래량 조회중 다음 에러 발생 : [ " + ex.Message + " ]\n", 0);
+                    }
+
+                    axKHOpenAPI1.DisconnectRealData(scr_no);
+
+                    if (for_flag == 1)
+                    {
+                        break;
+                    }
+                    else if (for_flag == 0)
+                    {
+                        delay(200);
+                        continue;
+                    }
+                    delay(200);
+
+                }  // end of 거래량 조회
+            }
+
+            for(int i =0; i < strategy1_lst.Count; i++)
+            {
+                write_sys_log("거래종목 : [ " + jongmok_lst[i] + " ] / 거래량 : [ " + strategy1_lst[i] + " ]\n", 0);
+            }
+        }
+
+        // 거래량 호출 메서드 (1,000,000 거래량 이상 sorting)
+
+        // 매도잔량 vs 매수잔량 비교 메서드
+        // TB_TRD_JONGMOK 업데이트( Insert )
+
+        // -------------------- Strategy1 --------------------  //
+
+
         public void m_thread1()
         {
+
+            //Strategy1 strategy1 = new Strategy1();
+
             string cur_tm = null;
             int set_tb_accnt_flag = 0; // 1이면 호출 완료
             int set_tb_accnt_info_flag = 0; // 1이면 호출 완료
@@ -2564,6 +2677,9 @@ namespace TaewooBot
 
                 if (set_tb_accnt_flag == 0)
                 {
+                    //Strategy1 strategy1 = new Strategy1();
+                    get_Kosdaq_lst();
+                    delay(2000);
                     set_tb_accnt_flag = 1;
                     set_tb_accnt();
                 }
