@@ -15,3 +15,7 @@ C:\Users\tangb\source\repos\TaewooBot\obj\Debug\TaewooBot.exe
 C:\Users\tangb\source\repos\TaewooBot\obj\Debug\TaewooBot.pdb
 C:\Users\tangb\source\repos\TaewooBot\bin\Debug\Oracle.ManagedDataAccess.dll
 C:\Users\tangb\source\repos\TaewooBot\obj\Debug\TaewooBot.csproj.CopyComplete
+C:\Users\tangb\source\repos\TaewooBot\bin\Debug\TaewooBot.exe.manifest
+C:\Users\tangb\source\repos\TaewooBot\bin\Debug\TaewooBot.application
+C:\Users\tangb\source\repos\TaewooBot\obj\Debug\TaewooBot.exe.manifest
+C:\Users\tangb\source\repos\TaewooBot\obj\Debug\TaewooBot.application
