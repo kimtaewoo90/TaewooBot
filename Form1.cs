@@ -27,6 +27,9 @@ namespace TaewooBot
 {
     public partial class Form1 : Form
     {
+        // Test version
+        bool g_test_checked = false;
+
 
         // 비밀번호 전역 변수 설정
         string g_passwd = "0070";
@@ -2539,6 +2542,19 @@ namespace TaewooBot
             }
         }
 
+        // Test 체크박스
+        private void checkBox1_CheckedChanged(object sender, EventArgs e)
+        {
+            if (checkBox1.Checked)
+            {
+                g_test_checked = true;
+            }
+            else
+            {
+                g_test_checked = false;
+            }
+        }
+
 
         // 자동매매 시작
         private void button5_Click(object sender, EventArgs e)
@@ -2638,9 +2654,50 @@ namespace TaewooBot
                 }  // end of 거래량 조회
             }
 
-            for(int i =0; i < strategy1_lst.Count; i++)
+            Insert_strategy1(jongmok_lst);
+        }
+
+        public void Insert_strategy1(string[] jongmok_lst)
+        {
+            OracleCommand cmd = null;
+            OracleConnection conn = null;
+            string sql = null;
+
+            conn = null;
+            conn = connect_db();
+
+            cmd = null;
+
+            cmd = new OracleCommand();
+            cmd.Connection = conn;
+            cmd.CommandType = CommandType.Text;
+
+            for (int i = 0; i < strategy1_lst.Count; i++)
             {
+                if (strategy1_lst.Count != jongmok_lst.Length)
+                {
+                    write_sys_log("거래량 리스트의 갯수와 종목 리스트의 갯수가 다름.\n", 0);
+                    break;
+                }
+
+                sql = @"Insert into strategy1 (jongmok_cd, jongmok_nm, liquidity, buy_amt, sell_amt, update_time) 
+                        Values (" + "'" + jongmok_lst[i] + "', " +
+                                    "'" + get_jongmok_nm(jongmok_lst[i]) + "', " +
+                                          strategy1_lst[i] + "," + "0, 0, to_char(sysdate, 'yyyymmdd')  )";
+
+                cmd.CommandText = sql;
+
+                try
+                {
+                    cmd.ExecuteNonQuery();
+                }
+                catch (Exception ex)
+                {
+                    write_sys_log("Strategy1 테이블 업데이트 중 다음 에러 발생 : [" + ex.Message + "]", 0);
+                }
+
                 write_sys_log("거래종목 : [ " + jongmok_lst[i] + " ] / 거래량 : [ " + strategy1_lst[i] + " ]\n", 0);
+
             }
         }
 
@@ -2654,14 +2711,13 @@ namespace TaewooBot
 
         public void m_thread1()
         {
-
-            //Strategy1 strategy1 = new Strategy1();
-
             string cur_tm = null;
             int set_tb_accnt_flag = 0; // 1이면 호출 완료
             int set_tb_accnt_info_flag = 0; // 1이면 호출 완료
 
             int sell_ord_first_flag = 0; // 장시작전 매도주문 flag.
+
+            int flag_strategy1 = 0;
 
             if (g_is_thread == 0)
             {
@@ -2673,24 +2729,27 @@ namespace TaewooBot
             {
                 cur_tm = get_cur_tm(); // 현재시각 조회
                 toolStripStatusLabel1.Text = cur_tm; // 화면 하단 상태란에 메시지 출력
-               //--------------------------------- test --------------------------//
+                                                     
 
-                if (set_tb_accnt_flag == 0)
+                if (g_test_checked == true)
                 {
-                    //Strategy1 strategy1 = new Strategy1();
-                    get_Kosdaq_lst();
-                    delay(2000);
-                    set_tb_accnt_flag = 1;
-                    set_tb_accnt();
-                }
+                    //--------------------------------- test --------------------------//
+                    if (set_tb_accnt_flag == 0)
+                    {
+                        get_Kosdaq_lst();
+                        delay(2000);
+                        set_tb_accnt_flag = 1;
+                        set_tb_accnt();
+                    }
 
-                if (set_tb_accnt_info_flag == 0)
-                {
-                    set_tb_accnt_info_flag = 1;
-                    set_tb_accnt_info();
-                }
+                    if (set_tb_accnt_info_flag == 0)
+                    {
+                        set_tb_accnt_info_flag = 1;
+                        set_tb_accnt_info();
+                    }
+                    //--------------------------------- test --------------------------//
 
-                //--------------------------------- test --------------------------//
+                }
 
                 if (cur_tm.CompareTo("083001") >= 0)
                 {
@@ -2722,6 +2781,18 @@ namespace TaewooBot
                         {
                             break;
                         }
+
+                        // 10분에 한번씩 거래량 체크
+                        if(int.Parse(cur_tm.Substring(2,3)) % 5 == 0 && flag_strategy1 == 0)
+                        {
+                            get_Kosdaq_lst();
+                            flag_strategy1 = 1;
+                        }
+                        else if(int.Parse(cur_tm.Substring(2, 3)) % 5 != 0)
+                        {
+                            flag_strategy1 = 0;
+                        }
+
 
                         // 장 중 매수 or 매도 실행
                         real_buy_ord();  // 실시간 매수주문 메서드 호출
@@ -2772,6 +2843,7 @@ namespace TaewooBot
             g_is_thread = 0;
             write_sys_log("Stopped AUTO TRADING \r\n", 0);
         }
+
 
     }
 }
